@@ -3,51 +3,67 @@ package main
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"strings"
 
-	"golang.org/x/net/html"
+	"github.com/PuerkitoBio/goquery"
 )
 
-// Image ... crawls the html response for the meta tag containing the source image
-func Image(doc *html.Node) (*html.Node, error) {
-	var image *html.Node
-	var crawler func(*html.Node)
-	crawler = func(node *html.Node) {
-		if node.Type == html.ElementNode && node.Data == "meta" {
+const xkcdRandomURL = "https://c.xkcd.com/random/comic/"
 
-			image = node
-			return
+type comic struct {
+	title, alt, src string
+}
+
+func getComicFromSelection(s *goquery.Selection) (comic, error) {
+	var c comic
+
+	attrMap := map[string]string{"title": "", "alt": "", "src": ""}
+	for key := range attrMap {
+		val, found := s.Attr(key)
+		if !found {
+			return c, errors.New("html document error: missing comic attr: " + key)
 		}
-		for child := node.FirstChild; child != nil; child = child.NextSibling {
-			crawler(child)
-		}
+		attrMap[key] = val
 	}
-	crawler(doc)
-	if image != nil {
-		return image, nil
-	}
-	return nil, errors.New("Missing <meta> in the node tree")
+
+	c.title = attrMap["title"]
+	c.alt = attrMap["alt"]
+	c.src = strings.Replace(attrMap["src"], "//", "https://", 1)
+
+	return c, nil
 }
 
 func main() {
-	res, err := http.Get("https://c.xkcd.com/random/comic/")
+	// Request the HTML
+	res, err := http.Get(xkcdRandomURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		log.Fatalf("status code error: %d %s", res.StatusCode, res.Status)
+	}
+
+	// Load the HTML document
+	doc, err := goquery.NewDocumentFromReader(res.Body)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	body, err := ioutil.ReadAll(res.Body)
-	res.Body.Close()
-	if err != nil {
-		log.Fatal(err)
+	// Find the comic image
+	comicImg := doc.Find("#comic img")
+	for i := range comicImg.Nodes {
+		img := comicImg.Eq(i)
+		comic, err := getComicFromSelection(img)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		// Save the image
+		// TODO
+		fmt.Printf("Title: %s\nAlt: %s\nSrc: %s\n", comic.title, comic.alt, comic.src)
 	}
 
-	doc, _ := html.Parse(strings.NewReader(string(body)))
-	image, err := Image(doc)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println(image)
 }
