@@ -11,6 +11,7 @@ import (
 )
 
 const xkcdRandomURL = "https://c.xkcd.com/random/comic/"
+const xkcdComicSelector = "#comic img"
 
 type comic struct {
 	title, alt, src string
@@ -53,7 +54,7 @@ func main() {
 	}
 
 	// Find the comic image
-	comicImg := doc.Find("#comic img")
+	comicImg := doc.Find(xkcdComicSelector)
 	for i := range comicImg.Nodes {
 		img := comicImg.Eq(i)
 		comic, err := getComicFromSelection(img)
